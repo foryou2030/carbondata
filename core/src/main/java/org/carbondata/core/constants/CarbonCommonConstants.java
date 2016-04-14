@@ -1383,7 +1383,24 @@ public final class CarbonCommonConstants {
      * DEFAULT_ENABLE_LOAD_MERGE
      */
     public static final String DEFAULT_ENABLE_LOAD_MERGE = "false";
+    
+    /**
+     * ZOOKEEPER_ENABLE_LOCK if this is set to true then zookeeper will be used to handle locking
+     * mechanism of carbon
+     */
+    public static final String LOCK_TYPE = "carbon.lock.type";
 
+    /**
+     * ZOOKEEPER_ENABLE_DEFAULT the default value for zookeeper will be true for carbon
+     */
+    public static final String LOCK_TYPE_DEFAULT = "LOCALLOCK";
+    
+    /**
+     * ZOOKEEPER_LOCATION this is the location in zookeeper file system where locks are created.
+     * mechanism of carbon
+     */
+    public static final String ZOOKEEPER_LOCATION = "/Carbon/locks";
+    
     /**
      * shared directory folder name
      */

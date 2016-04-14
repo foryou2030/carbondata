@@ -16,30 +16,25 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+package org.carbondata.core.locks;
 
-package org.carbondata.processing.mdkeygen;
-
-import org.carbondata.core.keygenerator.KeyGenerator;
-import org.pentaho.di.core.row.RowMetaInterface;
-import org.pentaho.di.trans.step.BaseStepData;
-import org.pentaho.di.trans.step.StepDataInterface;
-
-public class CarbonMDKeyGenStepData extends BaseStepData implements StepDataInterface {
-    /**
-     * outputRowMeta
-     */
-    protected RowMetaInterface outputRowMeta;
+/**
+ * Carbon Lock Interface which handles the locking and unlocking.
+ */
+public interface ICarbonLock {
 
     /**
-     * generator
+     * Does the unlocking of the acquired lock.
+     *
+     * @return
      */
-    protected KeyGenerator generator;
+    boolean unlock();
 
     /**
-     * CONSTRUCTOR
+     * This will acquire the lock and if it doesnt get then it will retry after the confiured time.
+     *
+     * @return
      */
-    public CarbonMDKeyGenStepData() {
-        super();
-    }
+    boolean lockWithRetries();
 
 }

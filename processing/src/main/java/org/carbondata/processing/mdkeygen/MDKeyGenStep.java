@@ -246,28 +246,33 @@ public class MDKeyGenStep extends BaseStep {
             return false;
         }
 
-        this.meta.setHighCardinalityCount(
-                RemoveDictionaryUtil.extractHighCardCount(this.meta.getHighCardinalityDims()));
+        this.meta.setNoDictionaryCount(
+                RemoveDictionaryUtil.extractNoDictionaryCount(this.meta.getNoDictionaryDims()));
 
         String levelCardinalityFilePath = storeLocation + File.separator +
                 CarbonCommonConstants.LEVEL_METADATA_FILE + meta.getTableName() + ".metadata";
 
-        try {
-            int[] dimLensWithComplex =
+        int[] dimLensWithComplex=null;
+        try{
+          dimLensWithComplex =
                     CarbonUtil.getCardinalityFromLevelMetadataFile(levelCardinalityFilePath);
-            List<Integer> dimsLenList = new ArrayList<Integer>();
-            for (int eachDimLen : dimLensWithComplex) {
-                if (eachDimLen != 0) dimsLenList.add(eachDimLen);
-            }
-            dimLens = new int[dimsLenList.size()];
-            for (int i = 0; i < dimsLenList.size(); i++) {
-                dimLens[i] = dimsLenList.get(i);
-            }
-        } catch (CarbonUtilException e) {
-            LOGGER.error(CarbonDataProcessorLogEvent.UNIBI_CARBONDATAPROCESSOR_MSG,
+        }catch(CarbonUtilException e){
+          LOGGER.error(CarbonDataProcessorLogEvent.UNIBI_CARBONDATAPROCESSOR_MSG,
                     "Level cardinality file :: " + e.getMessage());
-            return false;
+                 return false;
         }
+        if(null==dimLensWithComplex){
+          return false;
+        }
+        List<Integer> dimsLenList = new ArrayList<Integer>();
+        for (int eachDimLen : dimLensWithComplex) {
+            if (eachDimLen != 0) dimsLenList.add(eachDimLen);
+        }
+        dimLens = new int[dimsLenList.size()];
+        for (int i = 0; i < dimsLenList.size(); i++) {
+            dimLens[i] = dimsLenList.get(i);
+        }
+ 
         String[] dimStoreType = meta.getDimensionsStoreType().split(",");
         boolean[] dimensionStoreType = new boolean[dimLens.length];
         for (int i = 0; i < dimensionStoreType.length; i++) {
@@ -284,7 +289,7 @@ public class MDKeyGenStep extends BaseStep {
         this.dimensionCount = meta.getDimensionCount();
 
         int simpleDimsCount =
-                this.dimensionCount - meta.getComplexDimsCount() - meta.getHighCardinalityCount();
+                this.dimensionCount - meta.getComplexDimsCount() - meta.getNoDictionaryCount();
         int[] simpleDimsLen = new int[simpleDimsCount];
         for (int i = 0; i < simpleDimsCount; i++) {
             simpleDimsLen[i] = dimLens[i];
@@ -332,7 +337,7 @@ public class MDKeyGenStep extends BaseStep {
     private void initDataHandler() {
         ValueCompressionModel valueCompressionModel = getValueCompressionModel(storeLocation);
         int simpleDimsCount =
-                this.dimensionCount - meta.getComplexDimsCount() - meta.getHighCardinalityCount();
+                this.dimensionCount - meta.getComplexDimsCount() - meta.getNoDictionaryCount();
         int[] simpleDimsLen = new int[simpleDimsCount];
         for (int i = 0; i < simpleDimsCount; i++) {
             simpleDimsLen[i] = dimLens[i];
@@ -348,21 +353,21 @@ public class MDKeyGenStep extends BaseStep {
         //aggType = valueCompressionModel.getType();
         initAggType(msrdataTypes);
         finalMerger = new SingleThreadFinalSortFilesMerger(dataFolderLocation, tableName,
-                dimensionCount - meta.getComplexDimsCount(), meta.getComplexDimsCount(),
-                measureCount, meta.getHighCardinalityCount(), aggType);
-        if (meta.getHighCardinalityCount() > 0) {
+                dimensionCount - meta.getComplexDimsCount()-meta.getNoDictionaryCount(), meta.getComplexDimsCount(),
+                measureCount, meta.getNoDictionaryCount(), aggType);
+        if (meta.getNoDictionaryCount() > 0) {
             dataHandler = new CarbonFactDataHandlerColumnar(meta.getSchemaName(), meta.getCubeName(),
                     this.tableName, false, measureCount,
                     data.generator[dimLens.length].getKeySizeInBytes(), measureCount + 1, null,
                     null, storeLocation, dimLens, false, false, dimLens, null, null, true,
-                    meta.getCurrentRestructNumber(), meta.getHighCardinalityCount(), dimensionCount,
+                    meta.getCurrentRestructNumber(), meta.getNoDictionaryCount(), dimensionCount,
                     complexIndexMap, simpleDimsLen, this.hybridStoreModel, aggType);
         } else {
             dataHandler = new CarbonFactDataHandlerColumnar(meta.getSchemaName(), meta.getCubeName(),
                     this.tableName, false, measureCount,
                     data.generator[dimLens.length].getKeySizeInBytes(), measureCount, null, null,
                     storeLocation, dimLens, false, false, dimLens, null, null, true,
-                    meta.getCurrentRestructNumber(), meta.getHighCardinalityCount(), dimensionCount,
+                    meta.getCurrentRestructNumber(), meta.getNoDictionaryCount(), dimensionCount,
                     complexIndexMap, simpleDimsLen, this.hybridStoreModel, aggType);
         }
     }
@@ -419,7 +424,7 @@ public class MDKeyGenStep extends BaseStep {
     private Object[] process(Object[] row) throws KettleException {
         Object[] outputRow = null;
         // adding one for the high cardinality dims byte array.
-        if (meta.getHighCardinalityCount() > 0 || meta.getComplexDimsCount() > 0) {
+        if (meta.getNoDictionaryCount() > 0 || meta.getComplexDimsCount() > 0) {
             outputRow = new Object[measureCount + 1 + 1];
         } else {
             outputRow = new Object[measureCount + 1];

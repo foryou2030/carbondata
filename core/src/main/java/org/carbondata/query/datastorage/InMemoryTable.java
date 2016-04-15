@@ -44,7 +44,7 @@ import org.carbondata.core.metadata.CarbonSchemaReader;
 import org.carbondata.core.util.CarbonUtil;
 import org.carbondata.core.util.CarbonUtilException;
 import org.carbondata.core.vo.HybridStoreModel;
-import org.carbondata.query.datastorage.cache.CarbonLRULevelCache;
+import org.carbondata.core.cache.CarbonLRUCache;
 import org.carbondata.query.datastorage.cache.LevelInfo;
 import org.carbondata.query.util.CacheUtil;
 import org.carbondata.query.util.CarbonEngineLogEvent;
@@ -126,7 +126,7 @@ public class InMemoryTable implements Comparable<InMemoryTable> {
     private int[] dimensionCardinality;
     private KeyGenerator keyGenerator;
     private String tableName;
-    private CarbonLRULevelCache levelCache;
+    private CarbonLRUCache levelCache;
     private Cube metaCube;
     private HybridStoreModel hybridStoreModel;
     /**
@@ -148,7 +148,6 @@ public class InMemoryTable implements Comparable<InMemoryTable> {
         this.cubeUniqueName = this.schemaName + '_' + this.cubeName;
         this.id = counter.incrementAndGet();
         this.factTableName = CarbonSchemaReader.getFactTableName(cube);
-        this.levelCache = CarbonLRULevelCache.getInstance();
         this.tableName = tableName;
         this.fileStore = fileStore;
         this.modificationTime = modificationTime;
@@ -233,10 +232,10 @@ public class InMemoryTable implements Comparable<InMemoryTable> {
             List<Dimension> dimensions = metaCube.getDimensions(tableName);
 
             boolean[] dimensionStoreType = new boolean[dimensionCardinality.length];
-            List<Integer> highCardDimOrdinals = new ArrayList<Integer>();
+            List<Integer> NoDictionaryDimOrdinals = new ArrayList<Integer>();
             for (Dimension dimension : dimensions) {
-                if (dimension.isHighCardinalityDim()) {
-                    highCardDimOrdinals.add(dimension.getOrdinal());
+                if (dimension.isNoDictionaryDim()) {
+                    NoDictionaryDimOrdinals.add(dimension.getOrdinal());
                     continue;
                 }
                 if (dimension.isColumnar()) {
@@ -245,7 +244,7 @@ public class InMemoryTable implements Comparable<InMemoryTable> {
             }
             hybridStoreModel = CarbonUtil
                     .getHybridStoreMeta(findRequiredDimensionForStartAndEndKey(),
-                            dimensionStoreType, highCardDimOrdinals);
+                            dimensionStoreType, NoDictionaryDimOrdinals);
             keyGenerator = KeyGeneratorFactory
                     .getKeyGenerator(hybridStoreModel.getHybridCardinality(),
                             hybridStoreModel.getDimensionPartitioner());
@@ -274,7 +273,7 @@ public class InMemoryTable implements Comparable<InMemoryTable> {
         // Process dimension and hierarchies cache
         for (int i = 0; i < carbonCube.dimensions.length; i++) {
             dimension = carbonCube.dimensions[i];
-            if (dimension.visible && !dimension.highCardinality) {
+            if (dimension.visible && !dimension.noDictionary) {
                 DimensionHierarichyStore cache =
                         new DimensionHierarichyStore(dimension, membersCache, cubeUniqueName,
                                 factTableName, schema);
@@ -288,10 +287,9 @@ public class InMemoryTable implements Comparable<InMemoryTable> {
                     if (null == levelCache.get(levelCacheKey)) {
                         long memberFileSize = CacheUtil.getMemberFileSize(fileName);
                         LevelInfo levelInfo =
-                                new LevelInfo(memberFileSize, dimension.name, levelActualName,
-                                        factTableName, fileStore, loadFolderName);
+                                new LevelInfo();
                         levelInfo.setLoaded(false);
-                        levelCache.put(levelCacheKey, levelInfo);
+                        levelCache.put(levelCacheKey, levelInfo, memberFileSize);
                     }
                 } else {
                     cache.processCacheFromFileStore(fileStore, executorService);

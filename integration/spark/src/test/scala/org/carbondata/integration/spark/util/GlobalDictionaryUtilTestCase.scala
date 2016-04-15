@@ -69,8 +69,8 @@ class GlobalDictionaryUtilTestCase extends QueryTest with BeforeAndAfterAll  {
 
   def buildCarbonLoadModel(relation: CarbonRelation, dimensionFilePath: String): CarbonLoadModel = {
     val carbonLoadModel = new CarbonLoadModel
-    carbonLoadModel.setTableName(relation.cubeMeta.cubeName)
-    carbonLoadModel.setSchemaName(relation.cubeMeta.schemaName)
+    carbonLoadModel.setTableName(relation.cubeMeta.dbName)
+    carbonLoadModel.setSchemaName(relation.cubeMeta.tableName)
     carbonLoadModel.setSchema(relation.cubeMeta.schema)
     carbonLoadModel.setFactFilePath(filePath)
     carbonLoadModel.setDimFolderPath(dimensionFilePath)
@@ -87,11 +87,11 @@ class GlobalDictionaryUtilTestCase extends QueryTest with BeforeAndAfterAll  {
     sql("LOAD DATA fact from '" + filePath + "' INTO CUBE sample1 PARTITIONDATA(DELIMITER ',', QUOTECHAR '')")
     
     var carbonLoadModel = buildCarbonLoadModel(sampleRelation, null)
-    var rtn = GlobalDictionaryUtil.generateGlobalDictionary(CarbonHiveContext, carbonLoadModel, false)
+    var rtn = GlobalDictionaryUtil.generateGlobalDictionary(CarbonHiveContext, carbonLoadModel, sampleRelation.cubeMeta.dataPath, false)
     assert( rtn === 1)
     //test for dimension table
     carbonLoadModel = buildCarbonLoadModel(dimSampleRelation, dimFilePath)
-    rtn = GlobalDictionaryUtil.generateGlobalDictionary(CarbonHiveContext, carbonLoadModel, false)
+    rtn = GlobalDictionaryUtil.generateGlobalDictionary(CarbonHiveContext, carbonLoadModel, dimSampleRelation.cubeMeta.dataPath, false)
     assert( rtn === 1)
   }
 }

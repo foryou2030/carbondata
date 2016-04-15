@@ -22,8 +22,11 @@ import scala.util.control.Breaks._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.HashMap
 import scala.collection.mutable.HashSet
+import scala.collection.JavaConversions.{asScalaBuffer, asScalaSet, seqAsJavaList}
+import scala.language.implicitConversions
 import org.apache.spark.sql.{ DataFrame, SQLContext }
 import org.carbondata.core.carbon.CarbonDef.Schema
+import org.carbondata.core.carbon.metadata.schema.table.column.CarbonDimension
 import org.carbondata.integration.spark.load.CarbonLoadModel
 import org.carbondata.integration.spark.rdd.ColumnPartitioner
 import org.carbondata.integration.spark.rdd.CarbonBlockDistinctValuesCombineRDD
@@ -42,6 +45,7 @@ import org.carbondata.core.reader.CarbonDictionaryReaderImpl
 import org.carbondata.integration.spark.rdd.DictionaryLoadModel
 import org.carbondata.core.datastorage.store.impl.FileFactory
 import org.carbondata.core.datastorage.store.filesystem.CarbonFile
+
 /**
  * A object which provide a method to generate global dictionary from CSV files.
  *
@@ -249,10 +253,10 @@ object GlobalDictionaryUtil extends Logging {
    */
   def generateGlobalDictionary(sqlContext: SQLContext,
                                carbonLoadModel: CarbonLoadModel,
+                               hdfsLocation: String,
                                isSharedDimension: Boolean) = {
     val rtn = 1
     try {
-      val hdfsLocation = CarbonProperties.getInstance().getProperty(CarbonCommonConstants.STORE_LOCATION_HDFS)
       val table = new CarbonTableIdentifier(carbonLoadModel.getSchemaName, carbonLoadModel.getTableName)
 
       //create dictionary folder if not exists
@@ -279,7 +283,8 @@ object GlobalDictionaryUtil extends Logging {
         }
       }
       //columns which need to generate global dictionary file
-      val requireColumns = pruneColumns(carbonLoadModel.getSchema.cubes(0).dimensions.map(_.name), df.columns)
+      val carbonTable = carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable
+      val requireColumns = pruneColumns(carbonTable.getDimensionByTableName(carbonTable.getFactTableName).toSeq.map(dim => dim.getColName).toArray, df.columns)
       if (requireColumns.size >= 1) {
         //select column to push down pruning
         df = df.select(requireColumns.head, requireColumns.tail: _*)

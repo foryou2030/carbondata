@@ -57,4 +57,30 @@ public class CarbonTableIdentifier implements Serializable{
     public String getTableName() {
         return tableName;
     }
+
+    /**
+     * overridden equals method
+     *
+     * @param other
+     * @return
+     */
+    @Override public boolean equals(Object other) {
+        if (this == other) return true;
+        if (other == null || getClass() != other.getClass()) return false;
+        CarbonTableIdentifier that = (CarbonTableIdentifier) other;
+        if (!databaseName.equals(that.databaseName)) return false;
+        return tableName.equals(that.tableName);
+
+    }
+
+    /**
+     * overridden hashcode method
+     *
+     * @return
+     */
+    @Override public int hashCode() {
+        int result = databaseName.hashCode();
+        result = 31 * result + tableName.hashCode();
+        return result;
+    }
 }

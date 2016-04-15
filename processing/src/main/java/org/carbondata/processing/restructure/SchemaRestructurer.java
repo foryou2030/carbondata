@@ -253,6 +253,10 @@ public class SchemaRestructurer {
                 defaultVal = defaultValues.get(aDimension.name) == null ?
                         null :
                         defaultValues.get(aDimension.name);
+                if(aDimension.noDictionary)
+                {
+                	continue;
+                }
                 if (null != defaultVal) {
                     defValuesWithFactTableNames.put(tableName + '_' + levelColName, defaultVal);
                     dimLens.add(2);
@@ -285,8 +289,9 @@ public class SchemaRestructurer {
         newSliceMetaData.setMeasuresAggregator(
                 measureAggregators.toArray(new String[measureAggregators.size()]));
 
-        newSliceMetaData.setHeirAnKeySize(
-                CarbonSchemaParser.getHeirAndKeySizeMapForFact(cube.dimensions, schema));
+        //TO-DO need to pass new schema
+        /*newSliceMetaData.setHeirAnKeySize(
+                CarbonSchemaParser.getHeirAndKeySizeMapForFact(cube.dimensions, schema));*/
 
         int[] updatedCardinality =
                 ArrayUtils.toPrimitive(dimLens.toArray(new Integer[dimLens.size()]));

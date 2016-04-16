@@ -16,15 +16,47 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.carbondata.core.carbon.metadata.encoder;
+
+package org.carbondata.core.load;
+
+
+
+import java.io.Serializable;
 
 /**
- * Encoding type supported in carbon
+ * blocks info
  */
-public enum Encoding {
-    DICTIONARY,
-    DELTA,
-    RLE,
-    INVERTED_INDEX,
-    BIT_PACKED;
+public class BlockDetails implements Serializable {
+
+    //block offset
+    private long blockOffset;
+    //block length
+    private long blockLength;
+    //file path which block belong to
+    private String filePath;
+
+    public long getBlockOffset() {
+        return blockOffset;
+    }
+
+    public void setBlockOffset(long blockOffset) {
+        this.blockOffset = blockOffset;
+    }
+
+    public long getBlockLength() {
+        return blockLength;
+    }
+
+    public void setBlockLength(long blockLength) {
+        this.blockLength = blockLength;
+    }
+
+    public String getFilePath() {
+        return filePath;
+    }
+
+    public void setFilePath(String filePath) {
+        this.filePath = filePath;
+    }
+    
 }

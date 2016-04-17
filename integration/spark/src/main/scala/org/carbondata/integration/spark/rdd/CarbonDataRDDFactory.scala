@@ -252,7 +252,7 @@ object CarbonDataRDDFactory extends Logging {
         storeLocation,
         relation.cubeMeta.dataPath,
         kettleHomePath,
-        relation.cubeMeta.partitioner, columinar, true)
+        relation.cubeMeta.partitioner, columinar, true, true)
     }
   }
 
@@ -264,6 +264,7 @@ object CarbonDataRDDFactory extends Logging {
                     partitioner: Partitioner,
                     columinar: Boolean,
                     isAgg: Boolean,
+                    isPartition: Boolean,
                     partitionStatus: String = CarbonCommonConstants.STORE_LOADSTATUS_SUCCESS) {
     //val cube = CarbonMetadata.getInstance().getCubeWithCubeName(carbonLoadModel.getCubeName(), carbonLoadModel.getSchemaName());
     val cube = carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable
@@ -301,7 +302,7 @@ object CarbonDataRDDFactory extends Logging {
       val schemaLastUpdatedTime = CarbonEnv.getInstance(sc).carbonCatalog.getSchemaLastUpdatedTime(carbonLoadModel.getSchemaName, carbonLoadModel.getCubeName)
 
       //TODO:need to get from other place
-      val isPartition = true
+//      val isPartition = true
       var blocksGroupBy: Array[(String, Array[BlockDetails])] = null
       if (!isPartition) {
         /**

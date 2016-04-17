@@ -1640,7 +1640,7 @@ private[sql] case class LoadCubeAPI(schemaName: String, cubeName: String, factPa
 
     val carbonLock = CarbonLockFactory.getCarbonLockObj(CarbonMetadata.getInstance().getCube(schemaName + "_" + cubeName).getMetaDataFilepath(),LockUsage.METADATA_LOCK)
     try {
-      CarbonDataRDDFactory.loadCarbonData(sqlContext, carbonLoadModel, storeLocation, relation.cubeMeta.dataPath, kettleHomePath, relation.cubeMeta.partitioner, columinar, false);
+      CarbonDataRDDFactory.loadCarbonData(sqlContext, carbonLoadModel, storeLocation, relation.cubeMeta.dataPath, kettleHomePath, relation.cubeMeta.partitioner, columinar, false, true);
 
     } finally {
       if (carbonLock != null) {
@@ -1734,6 +1734,7 @@ private[sql] case class LoadCube(
       val fileHeader = partionValues.getOrElse("fileheader", "")
       val escapeChar = partionValues.getOrElse("escapechar", "")
       val multiLine = partionValues.getOrElse("multiline", false)
+      val localDictionaryPath = partionValues.getOrElse("local_dictionary_path", null)
       val complex_delimiter_level_1 = partionValues.getOrElse("complex_delimiter_level_1", "\\$")
       val complex_delimiter_level_2 = partionValues.getOrElse("complex_delimiter_level_2", "\\:")
       var booleanValForMultiLine = false
@@ -1752,35 +1753,56 @@ private[sql] case class LoadCube(
     	  carbonLoadModel.setComplexDelimiterLevel1(CarbonUtil.escapeComplexDelimiterChar(complex_delimiter_level_1))
     	  carbonLoadModel.setComplexDelimiterLevel2(CarbonUtil.escapeComplexDelimiterChar(complex_delimiter_level_2))
       }
-
+      var isPartition = true
+      var isProvideLocalDicionary = false
+      /**
+        *  if option include local_dictionary_path, mean phrase2, no need partion
+        *  and generate global dictionary from local dictionary
+        */
+      if(localDictionaryPath != null)
+      {
+        isPartition = false
+        isProvideLocalDicionary = true
+      }
       var partitionStatus = CarbonCommonConstants.STORE_LOADSTATUS_SUCCESS
       try {
-        //First system has to partition the data first and then call the load data
-        if (null == relation.cubeMeta.partitioner.partitionColumn || relation.cubeMeta.partitioner.partitionColumn(0).isEmpty) {
-          LOGGER.info(CarbonSparkInterFaceLogEvent.UNIBI_CARBON_SPARK_INTERFACE_MSG, "Initiating Direct Load for the Cube : (" +
+        if(isPartition) {
+          //First system has to partition the data first and then call the load data
+          if (null == relation.cubeMeta.partitioner.partitionColumn || relation.cubeMeta.partitioner.partitionColumn(0).isEmpty) {
+            LOGGER.info(CarbonSparkInterFaceLogEvent.UNIBI_CARBON_SPARK_INTERFACE_MSG, "Initiating Direct Load for the Cube : (" +
+              schemaName + "." + cubeName + ")")
+            carbonLoadModel.setFactFilePath(factPath)
+            carbonLoadModel.setCsvDelimiter(CarbonUtil.unescapeChar(delimiter))
+            carbonLoadModel.setCsvHeader(fileHeader)
+            carbonLoadModel.setDirectLoad(true)
+          }
+          else {
+            LOGGER.info(CarbonSparkInterFaceLogEvent.UNIBI_CARBON_SPARK_INTERFACE_MSG, "Initiating Data Partitioning for the Cube : (" +
+              schemaName + "." + cubeName + ")")
+            carbonLoadModel.setFactFilePath(partitionLocation)
+            partitionStatus = CarbonContext.partitionData(
+              schemaName,
+              cubeName,
+              factPath,
+              partitionLocation,
+              delimiter,
+              quoteChar,
+              fileHeader,
+              escapeChar, booleanValForMultiLine)(sqlContext.asInstanceOf[HiveContext])
+          }
+        }
+        else
+        {
+          LOGGER.info(CarbonSparkInterFaceLogEvent.UNIBI_CARBON_SPARK_INTERFACE_MSG, "Initiating  no-need-partition Load for the Cube : (" +
             schemaName + "." + cubeName + ")")
           carbonLoadModel.setFactFilePath(factPath)
           carbonLoadModel.setCsvDelimiter(CarbonUtil.unescapeChar(delimiter))
           carbonLoadModel.setCsvHeader(fileHeader)
-          carbonLoadModel.setDirectLoad(true)
         }
-        else {
-          LOGGER.info(CarbonSparkInterFaceLogEvent.UNIBI_CARBON_SPARK_INTERFACE_MSG, "Initiating Data Partitioning for the Cube : (" +
-            schemaName + "." + cubeName + ")")
-          carbonLoadModel.setFactFilePath(partitionLocation)
-          partitionStatus = CarbonContext.partitionData(
-            schemaName,
-            cubeName,
-            factPath,
-            partitionLocation,
-            delimiter,
-            quoteChar,
-            fileHeader,
-            escapeChar, booleanValForMultiLine)(sqlContext.asInstanceOf[HiveContext])
-        }
-        GlobalDictionaryUtil.generateGlobalDictionary(sqlContext, carbonLoadModel, relation.cubeMeta.dataPath, false)
+        GlobalDictionaryUtil.generateGlobalDictionary(sqlContext, carbonLoadModel, relation.cubeMeta.dataPath, false,
+          isProvideLocalDicionary, localDictionaryPath)
         CarbonDataRDDFactory.loadCarbonData(sqlContext, carbonLoadModel, storeLocation, relation.cubeMeta.dataPath, kettleHomePath,
-          relation.cubeMeta.partitioner, columinar, false, partitionStatus);
+          relation.cubeMeta.partitioner, columinar, false, isPartition, partitionStatus);
         try {
           val loadMetadataFilePath = CarbonLoaderUtil
             .extractLoadMetadataFileLocation(carbonLoadModel)
@@ -1938,7 +1960,7 @@ private[sql] case class LoadAggregationTable(
       storeLocation,
       relation.cubeMeta.dataPath,
       kettleHomePath,
-      relation.cubeMeta.partitioner, columinar, true);
+      relation.cubeMeta.partitioner, columinar, true, true);
     Seq.empty
   }
 }

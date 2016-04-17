@@ -18,6 +18,11 @@
  */
 package org.carbondata.integration.spark.util
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{Path, FileSystem}
+import org.apache.spark.rdd.RDD
+
+import scala.collection.mutable
 import scala.util.control.Breaks._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.HashMap
@@ -245,6 +250,89 @@ object GlobalDictionaryUtil extends Logging {
   }
 
   /**
+   * combine local dictionary with SQLContext and CarbonLoadModel
+   *
+   * @param sqlContext
+   * @param model
+   * @param localDictionaryPath
+   * @return a integer 1: successfully
+   */
+  private def ReadLocalDictionaryAndCombine(sqlContext: SQLContext, model: DictionaryLoadModel,
+                                            localDictionaryPath: String):RDD[(Int, HashSet[String])] =
+  {
+    val distinctValuesList = new ArrayBuffer[(Int, HashSet[String])]()
+    //load exists dictionary file to list of HashMap
+    val (dicts, existDicts) = GlobalDictionaryUtil.readGlobalDictionaryFromFile(model)
+    // local combine set
+    val sets = new Array[HashSet[String]](model.columns.length)
+    val columnIndexMap = new HashMap[String, Integer]()
+    for(i <- 0 until model.columns.length)
+    {
+      sets(i) = new HashSet[String]
+      distinctValuesList += ((i, sets(i)))
+      columnIndexMap.put(model.columns(i), i)
+    }
+    // read local dictionary file, and put them into set
+    var fs: FileSystem = null
+    try
+    {
+      val conf = new Configuration()
+      val dictionaryPath = new Path(localDictionaryPath)
+      fs = dictionaryPath.getFileSystem(conf)
+      for(dictionaryFile <- fs.listStatus(dictionaryPath))
+      {
+        val fileName = dictionaryFile.getPath.getName
+        if(fileName.contains("dictionary") && dictionaryFile.getLen != 0)
+        {
+          var columnName:String = ""
+          for (column <- model.columns)
+          {
+            if (fileName.contains(column))
+            {
+              columnName = column
+            }
+          }
+          columnIndexMap.get(columnName) match
+          {
+            case Some(columnIndex) =>
+              val distinctValues = sqlContext.sparkContext.textFile(dictionaryFile.getPath.toString).collect()
+              for(value <- distinctValues)
+              {
+               if(existDicts(columnIndex))
+               {
+                 if(!dicts(columnIndex).contains(value))
+                 {
+                   sets(columnIndex).contains(value)
+                 }
+               }
+                else
+               {
+                 sets(columnIndex).add(value)
+               }
+              }
+            case None =>
+          }
+        }
+      }
+    }
+    catch
+    {
+      case ex: Exception =>
+        logError("combine local dictionary failed")
+        throw ex
+    }
+    finally
+    {
+      if(fs != null)
+      {
+        fs.close()
+      }
+    }
+   // convert distinctValuesList to inputRDD
+   sqlContext.sparkContext.makeRDD(distinctValuesList)
+  }
+
+  /**
    * generate global dictionary with SQLContext and CarbonLoadModel
    *
    * @param sqlContext
@@ -254,7 +342,9 @@ object GlobalDictionaryUtil extends Logging {
   def generateGlobalDictionary(sqlContext: SQLContext,
                                carbonLoadModel: CarbonLoadModel,
                                hdfsLocation: String,
-                               isSharedDimension: Boolean) = {
+                               isSharedDimension: Boolean,
+                               isProvideLocalDicionary: Boolean,
+                               localDictionaryPath: String) = {
     val rtn = 1
     try {
       val table = new CarbonTableIdentifier(carbonLoadModel.getSchemaName, carbonLoadModel.getTableName)
@@ -290,9 +380,18 @@ object GlobalDictionaryUtil extends Logging {
         df = df.select(requireColumns.head, requireColumns.tail: _*)
         val model = createDictionaryLoadModel(table, requireColumns,
           hdfsLocation, dictfolderPath, isSharedDimension)
-        //combine distinct value in a block and partition by column
-        val inputRDD = new CarbonBlockDistinctValuesCombineRDD(df.rdd, model)
+        var inputRDD: RDD[(Int, HashSet[String])] = null
+        if(isProvideLocalDicionary)
+        {
+          inputRDD = ReadLocalDictionaryAndCombine(sqlContext, model, localDictionaryPath)
           .partitionBy(new ColumnPartitioner(requireColumns.length))
+        }
+        else
+        {
+          //combine distinct value in a block and partition by column
+          inputRDD = new CarbonBlockDistinctValuesCombineRDD(df.rdd, model)
+            .partitionBy(new ColumnPartitioner(requireColumns.length))
+        }
         //generate global dictionary files
         val statusList = new CarbonGlobalDictionaryGenerateRDD(inputRDD, model).collect()
         //check result status

@@ -302,7 +302,7 @@ object CarbonDataRDDFactory extends Logging {
 
       //TODO:need to get from other place
       val isPartition = true
-      var part: Array[(String, Array[BlockDetails])] = null
+      var blocksGroupBy: Array[(String, Array[BlockDetails])] = null
       if (!isPartition) {
         /**
           * when data load handle by node partition
@@ -315,22 +315,28 @@ object CarbonDataRDDFactory extends Logging {
         hadoopConfiguration.set("mapreduce.input.fileinputformat.inputdir", carbonLoadModel.getFactFilePath)
         hadoopConfiguration.set("mapreduce.input.fileinputformat.input.dir.recursive", "true")
         val newHadoopRDD = new NewHadoopRDD[LongWritable, Text](sc.sparkContext, classOf[org.apache.hadoop.mapreduce.lib.input.TextInputFormat], classOf[LongWritable], classOf[Text], hadoopConfiguration)
-        part = new DummyLoadRDD(newHadoopRDD).collect().groupBy[String](_._1).map { iter => (iter._1, iter._2.map(_._2)) }.toArray
+        blocksGroupBy = new DummyLoadRDD(newHadoopRDD).collect().groupBy[String](_._1).map { iter => (iter._1, iter._2.map(_._2)) }.toArray
       } else {
+        /**
+          * when data handle by table split partition
+          * 1) get partition files, direct load or not will get the different files path
+          * 2) get files blocks by using SplitUtils
+          * 3) output Array[(partitionID,Array[BlockDetails])] to blocksGroupBy
+          */
         var splits = Array[TableSplit]()
         if (carbonLoadModel.isDirectLoad()) {
           //get all table Splits, this part means files were divide to different partitions
           splits = CarbonQueryUtil.getTableSplitsForDirectLoad(carbonLoadModel.getFactFilePath(), partitioner.nodeList, partitioner.partitionCount)
           //get all partition blocks from file list, output: Array[(partitionID,Array[BlockDetails])]
-          part = splits.map {
+          blocksGroupBy = splits.map {
             split =>
               (split.getPartition.getUniqueID, SplitUtils.getSplits(split.getPartition.getFilesPath, sc.sparkContext))
           }
         } else {
-          //get all table Splits,when come to this, mean data have been partition
+          //get all table Splits,when come to this, meanx data have been partition
           splits = CarbonQueryUtil.getTableSplits(carbonLoadModel.getSchemaName(), carbonLoadModel.getCubeName(), null, partitioner)
           //get all partition blocks from factFilePath/uniqueID/, output: Array[(partitionID,Array[BlockDetails])]
-          part = splits.map {
+          blocksGroupBy = splits.map {
             split =>
               val pathList: java.util.List[String] = new java.util.ArrayList[String]()
               pathList.add(carbonLoadModel.getFactFilePath + "/" + split.getPartition.getUniqueID + "/")
@@ -338,7 +344,7 @@ object CarbonDataRDDFactory extends Logging {
           }
         }
       }
-      val status = new CarbonDataLoadRDD(sc.sparkContext, new ResultImpl(), carbonLoadModel, storeLocation, hdfsStoreLocation, kettleHomePath, partitioner, columinar, currentRestructNumber, currentLoadCount, cubeCreationTime, schemaLastUpdatedTime, part,isPartition).collect()
+      val status = new CarbonDataLoadRDD(sc.sparkContext, new ResultImpl(), carbonLoadModel, storeLocation, hdfsStoreLocation, kettleHomePath, partitioner, columinar, currentRestructNumber, currentLoadCount, cubeCreationTime, schemaLastUpdatedTime, blocksGroupBy, isPartition).collect()
       val newStatusMap = scala.collection.mutable.Map.empty[String, String]
       status.foreach { eachLoadStatus =>
         val state = newStatusMap.get(eachLoadStatus._2.getPartitionCount)

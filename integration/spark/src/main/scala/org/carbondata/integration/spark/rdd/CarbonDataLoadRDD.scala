@@ -24,7 +24,7 @@ import java.util.UUID
 
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.cubemodel.Partitioner
-import org.apache.spark._
+import org.apache.spark.{Logging, Partition, SparkContext, TaskContext,SerializableWritable}
 import org.carbondata.common.logging.LogServiceFactory
 import org.carbondata.common.logging.impl.StandardLogService
 import org.carbondata.core.constants.CarbonCommonConstants
@@ -84,7 +84,7 @@ class CarbonNodeLoadPartition(rddId: Int, val idx: Int, host: String, val blocks
   * @param loadCount
   * @param cubeCreationTime
   * @param schemaLastUpdatedTime
-  * @param part
+  * @param blocksGroupBy
   * @param isPartition
   * @tparam K
   * @tparam V
@@ -101,7 +101,7 @@ class CarbonDataLoadRDD[K, V](
                            loadCount: Integer,
                            cubeCreationTime: Long,
                            schemaLastUpdatedTime: Long,
-                           part:Array[(String,Array[BlockDetails])],
+                           blocksGroupBy: Array[(String,Array[BlockDetails])],
                            isPartition: Boolean
                          )
   extends RDD[(K, V)](sc, Nil) with Logging {
@@ -123,15 +123,15 @@ class CarbonDataLoadRDD[K, V](
         val result = new Array[Partition](splits.length)
         for (i <- 0 until result.length) {
           //filter the same partition unique id, because only one will match, so get 0 element
-          val blocksDetails:Array[BlockDetails] = part.filter(p => p._1 == splits(i).getPartition.getUniqueID)(0)._2
+          val blocksDetails:Array[BlockDetails] = blocksGroupBy.filter(p => p._1 == splits(i).getPartition.getUniqueID)(0)._2
           result(i) = new CarbonPartitionLoadPartition(id, i, splits(i),blocksDetails)
         }
         result
       case false =>
         //for node partition
-        val result = new Array[Partition](part.length)
+        val result = new Array[Partition](blocksGroupBy.length)
         for (i <- 0 until result.length) {
-          result(i) = new CarbonNodeLoadPartition(id, i,part(i)._1,part(i)._2)
+          result(i) = new CarbonNodeLoadPartition(id, i,blocksGroupBy(i)._1,blocksGroupBy(i)._2)
         }
         result
     }

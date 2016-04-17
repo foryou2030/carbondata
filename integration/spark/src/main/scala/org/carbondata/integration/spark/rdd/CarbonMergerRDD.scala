@@ -213,6 +213,7 @@ class CarbonMergerRDD[K, V](
     // Do nothing. Hadoop RDD should not be checkpointed.
   }
 }
+
 class CarbonLoadPartition(rddId: Int, val idx: Int, @transient val tableSplit: TableSplit)
   extends Partition {
 

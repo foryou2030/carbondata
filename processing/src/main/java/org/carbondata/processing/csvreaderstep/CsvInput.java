@@ -368,7 +368,12 @@ public class CsvInput extends BaseStep implements StepInterface {
         }
 
         BlockDetails[] blocksInfo = GraphGenerator.blockInfo.get(meta.getBlocksID());
-
+        if (blocksInfo == null) {
+            //if isDirectLoad = true, and partition number > file num
+            //then blocksInfo will get null in some partition processing, so just return
+            setOutputDone();
+            return false;
+        }
         if (numberOfNodes > blocksInfo.length) {
             numberOfNodes = blocksInfo.length;
         }

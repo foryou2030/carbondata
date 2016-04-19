@@ -90,12 +90,12 @@ class GlobalDictionaryUtilTestCase extends QueryTest with BeforeAndAfterAll  {
     sql("LOAD DATA fact from '" + filePath + "' INTO CUBE sample1 PARTITIONDATA(DELIMITER ',', QUOTECHAR '')")
     
     var carbonLoadModel = buildCarbonLoadModel(sampleRelation, null)
-    var rtn = GlobalDictionaryUtil.generateGlobalDictionary(CarbonHiveContext, carbonLoadModel, sampleRelation.cubeMeta.dataPath, false)
+    var rtn = GlobalDictionaryUtil.generateGlobalDictionary(CarbonHiveContext, carbonLoadModel, sampleRelation.cubeMeta.dataPath, false, null)
     assert( rtn === 1)
     //test for dimension table
     //TODO - Need to fill and send the dimension table data as per new DimensionRelation in CarbonDataLoadModel
     carbonLoadModel = buildCarbonLoadModel(dimSampleRelation, dimFilePath)
-    rtn = GlobalDictionaryUtil.generateGlobalDictionary(CarbonHiveContext, carbonLoadModel, dimSampleRelation.cubeMeta.dataPath, false)
+    rtn = GlobalDictionaryUtil.generateGlobalDictionary(CarbonHiveContext, carbonLoadModel, dimSampleRelation.cubeMeta.dataPath, false, null)
     assert( rtn === 1)
   }
 }

@@ -89,6 +89,7 @@ class CarbonSqlDDLParser()
   protected val MAPPED = Keyword("MAPPED")
   protected val MEASURES = Keyword("MEASURES")
   protected val MULTILINE = Keyword("MULTILINE")
+  protected val LOCAL_DICTIONARY_PATH = Keyword("LOCAL_DICTIONARY_PATH")
   protected val COMPLEX_DELIMITER_LEVEL_1 = Keyword("COMPLEX_DELIMITER_LEVEL_1")
   protected val COMPLEX_DELIMITER_LEVEL_2 = Keyword("COMPLEX_DELIMITER_LEVEL_2")
   protected val NUMERIC = Keyword("NUMERIC")
@@ -395,6 +396,7 @@ class CarbonSqlDDLParser()
   protected lazy val partitionOptions: Parser[(String, String)] =
     ((DELIMITER ~ stringLit) | (QUOTECHAR ~ stringLit) | (FILEHEADER ~ stringLit) | 
         (ESCAPECHAR ~ stringLit) | (MULTILINE ~ stringLit) | 
+      (LOCAL_DICTIONARY_PATH ~ stringLit) |
         (COMPLEX_DELIMITER_LEVEL_1 ~ stringLit) | (COMPLEX_DELIMITER_LEVEL_2 ~ stringLit)) ^^ {
       case opt ~ optvalue => (opt, optvalue)
       case _ => ("", "")

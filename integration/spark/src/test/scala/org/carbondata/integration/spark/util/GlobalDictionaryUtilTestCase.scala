@@ -49,6 +49,13 @@ class GlobalDictionaryUtilTestCase extends QueryTest with BeforeAndAfterAll {
   var dimFilePath: String = _
   var complexfilePath1: String = _
   var complexfilePath2: String = _
+  var streamSampleRelation: CarbonRelation = _
+  var streamComplexRelation: CarbonRelation = _
+  var sampleLocalDictionaryFile: String = _
+  var complexLocalDictionaryFile: String = _
+  var localDictionaryFileExtension: String = _
+  var noLocalDictionaryFile: String = _
+
 
   def buildCarbonLoadModel(relation: CarbonRelation,
     filePath: String,
@@ -85,6 +92,10 @@ class GlobalDictionaryUtilTestCase extends QueryTest with BeforeAndAfterAll {
     dimFilePath = "dimTableSample:" + pwd + "/src/test/resources/dimTableSample.csv"
     complexfilePath1 = pwd + "/src/test/resources/complexdata1.csv"
     complexfilePath2 = pwd + "/src/test/resources/complexdata2.csv"
+    sampleLocalDictionaryFile = pwd + "/src/test/resources/localdictionary/sample/20160423/1400_1405/"
+    complexLocalDictionaryFile = pwd + "/src/test/resources/localdictionary/complex/20160423/1400_1405/"
+    localDictionaryFileExtension = ".dictionary"
+    noLocalDictionaryFile = ""
   }
 
   def buildTable() = {
@@ -136,6 +147,16 @@ class GlobalDictionaryUtilTestCase extends QueryTest with BeforeAndAfterAll {
     } catch {
       case ex: Throwable => logError(ex.getMessage + "\r\n" + ex.getStackTraceString)
     }
+    try {
+      sql("CREATE CUBE IF NOT EXISTS sample_stream DIMENSIONS (id STRING, name STRING, city STRING) MEASURES (age INTEGER) OPTIONS(PARTITIONER[CLASS='org.carbondata.integration.spark.partition.api.impl.SampleDataPartitionerImpl',COLUMNS=(id),PARTITION_COUNT=1])")
+    } catch {
+      case ex: Throwable => logError(ex.getMessage + "\r\n" + ex.getStackTraceString)
+    }
+    try {
+      sql("create cube complextypes_stream dimensions(deviceInformationId integer, channelsId string, ROMSize string, purchasedate string, mobile struct<imei string, imsi string>, MAC array<string>, locationinfo array<struct<ActiveAreaId integer, ActiveCountry string, ActiveProvince string, Activecity string, ActiveDistrict string, ActiveStreet string>>, proddate struct<productionDate string,activeDeactivedate array<string>>) measures(gamePointId numeric,contractNumber numeric) OPTIONS (PARTITIONER [CLASS = 'org.carbondata.integration.spark.partition.api.impl.SampleDataPartitionerImpl' ,COLUMNS= (deviceInformationId) , PARTITION_COUNT=1] )")
+    } catch {
+      case ex: Throwable => logError(ex.getMessage + "\r\n" + ex.getStackTraceString)
+    }
   }
 
   def buildRelation() = {
@@ -151,6 +172,9 @@ class GlobalDictionaryUtilTestCase extends QueryTest with BeforeAndAfterAll {
     incrementalLoadTableRelation = catalog
       .lookupRelation1(Option("default"), "incrementalLoadTable", None)(CarbonHiveContext)
       .asInstanceOf[CarbonRelation]
+
+    streamSampleRelation = catalog.lookupRelation1(Option("default"), "sample_stream", None)(CarbonHiveContext).asInstanceOf[CarbonRelation]
+    streamComplexRelation = catalog.lookupRelation1(Option("default"), "complextypes_stream", None)(CarbonHiveContext).asInstanceOf[CarbonRelation]
   }
 
   def checkDictionary(relation: CarbonRelation, columnName: String, value: String) {
@@ -170,11 +194,8 @@ class GlobalDictionaryUtilTestCase extends QueryTest with BeforeAndAfterAll {
   test("[issue-80]Global Dictionary Generation") {
 
     var carbonLoadModel = buildCarbonLoadModel(sampleRelation, filePath, null, null)
-    GlobalDictionaryUtil
-      .generateGlobalDictionary(CarbonHiveContext,
-        carbonLoadModel,
-        sampleRelation.cubeMeta.dataPath
-      )
+    GlobalDictionaryUtil.generateGlobalDictionary(CarbonHiveContext, carbonLoadModel,
+      sampleRelation.cubeMeta.dataPath, noLocalDictionaryFile, localDictionaryFileExtension)
 
     // test for dimension table
     // TODO - Need to fill and send the dimension table data as per new DimensionRelation in
@@ -188,40 +209,37 @@ class GlobalDictionaryUtilTestCase extends QueryTest with BeforeAndAfterAll {
     val header = "deviceInformationId,channelsId,ROMSize,purchasedate,mobile,MAC,locationinfo," +
       "proddate,gamePointId,contractNumber"
     var carbonLoadModel = buildCarbonLoadModel(complexRelation, complexfilePath2, null, header)
-    GlobalDictionaryUtil
-      .generateGlobalDictionary(CarbonHiveContext,
-        carbonLoadModel,
-        sampleRelation.cubeMeta.dataPath
-      )
+    GlobalDictionaryUtil.generateGlobalDictionary(CarbonHiveContext, carbonLoadModel,
+      complexRelation.cubeMeta.dataPath, noLocalDictionaryFile, localDictionaryFileExtension)
   }
 
   test("[Issue-232]Issue in incremental data load for dictionary generation") {
     val header = "deviceInformationId,channelsId,ROMSize,purchasedate,mobile,MAC,locationinfo," +
       "proddate,gamePointId,contractNumber"
     // load 1
-    var carbonLoadModel = buildCarbonLoadModel(incrementalLoadTableRelation,
-      complexfilePath1,
-      null,
-      header
-    )
-    GlobalDictionaryUtil
-      .generateGlobalDictionary(CarbonHiveContext,
-        carbonLoadModel,
-        sampleRelation.cubeMeta.dataPath
-      )
-    checkDictionary(incrementalLoadTableRelation, "deviceInformationId", "100010")
-
+    var carbonLoadModel = buildCarbonLoadModel(incrementalLoadTableRelation, complexfilePath1, null, header)
+    GlobalDictionaryUtil.generateGlobalDictionary(CarbonHiveContext, carbonLoadModel,
+      incrementalLoadTableRelation.cubeMeta.dataPath, noLocalDictionaryFile, localDictionaryFileExtension)
+    checkDictionary(incrementalLoadTableRelation, "deviceInformationId" ,"100010")
+    
     // load 2
-    carbonLoadModel = buildCarbonLoadModel(incrementalLoadTableRelation,
-      complexfilePath2,
-      null,
-      header
-    )
-    GlobalDictionaryUtil
-      .generateGlobalDictionary(CarbonHiveContext,
-        carbonLoadModel,
-        sampleRelation.cubeMeta.dataPath
-      )
-    checkDictionary(incrementalLoadTableRelation, "deviceInformationId", "100077")
+    carbonLoadModel = buildCarbonLoadModel(incrementalLoadTableRelation, complexfilePath2, null, header)
+    GlobalDictionaryUtil.generateGlobalDictionary(CarbonHiveContext, carbonLoadModel,
+      incrementalLoadTableRelation.cubeMeta.dataPath, noLocalDictionaryFile, localDictionaryFileExtension)
+    checkDictionary(incrementalLoadTableRelation, "deviceInformationId" ,"100077")
+   }
+
+  test("Support generate global dictionary from streamSmart local dictionary") {
+    var header = "id,name,city,age"
+    var carbonLoadModel = buildCarbonLoadModel(streamSampleRelation, filePath, null, header)
+    GlobalDictionaryUtil.generateGlobalDictionary(CarbonHiveContext, carbonLoadModel, streamSampleRelation.cubeMeta.dataPath,
+      sampleLocalDictionaryFile, localDictionaryFileExtension)
+  }
+
+  test("Support generate global dictionary from streamSmart local dictionary file for complex type") {
+    val header = "deviceInformationId,channelsId,ROMSize,purchasedate,mobile,MAC,locationinfo,proddate,gamePointId,contractNumber"
+    var carbonLoadModel = buildCarbonLoadModel(streamComplexRelation, complexfilePath2, null, header)
+    GlobalDictionaryUtil.generateGlobalDictionary(CarbonHiveContext, carbonLoadModel, streamComplexRelation.cubeMeta.dataPath,
+      complexLocalDictionaryFile, localDictionaryFileExtension)
   }
 }

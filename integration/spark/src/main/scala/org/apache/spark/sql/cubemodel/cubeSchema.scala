@@ -1871,6 +1871,8 @@ private[sql] case class LoadCube(
       val fileHeader = partionValues.getOrElse("fileheader", "")
       val escapeChar = partionValues.getOrElse("escapechar", "")
       val multiLine = partionValues.getOrElse("multiline", false)
+      val localDictionaryPath = partionValues.getOrElse("local_dictionary_path", "")
+      val dictionaryFileExtension = partionValues.getOrElse("dictionary_file_extension", ".dictionary")
       val complex_delimiter_level_1 = partionValues.getOrElse("complex_delimiter_level_1", "\\$")
       val complex_delimiter_level_2 = partionValues.getOrElse("complex_delimiter_level_2", "\\:")
       var booleanValForMultiLine = false
@@ -1924,7 +1926,7 @@ private[sql] case class LoadCube(
             escapeChar, booleanValForMultiLine)(sqlContext.asInstanceOf[HiveContext])
         }
         GlobalDictionaryUtil
-            .generateGlobalDictionary(sqlContext, carbonLoadModel, relation.cubeMeta.dataPath)
+          .generateGlobalDictionary(sqlContext, carbonLoadModel, relation.cubeMeta.dataPath, localDictionaryPath, dictionaryFileExtension)
         CarbonDataRDDFactory
             .loadCarbonData(sqlContext, carbonLoadModel, storeLocation, relation.cubeMeta.dataPath,
               kettleHomePath,

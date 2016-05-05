@@ -145,27 +145,12 @@ class CarbonBlockDistinctValuesCombineRDD(
   override def getPartitions: Array[Partition] = firstParent[Row].partitions
 
   override def compute(split: Partition, context: TaskContext): Iterator[(Int, Array[String])] = {
-    val LOGGER = LogServiceFactory.getLogService(this.getClass().getName());
+    val LOGGER = LogServiceFactory.getLogService(this.getClass().getName())
 
     val distinctValuesList = new ArrayBuffer[(Int, HashSet[String])]
     try {
-      // local combine set
+      val dimensionParsers = GlobalDictionaryUtil.createDimensionParsers(model, distinctValuesList)
       val dimNum = model.dimensions.length
-      val primDimNum = model.primDimensions.length
-      val columnValues = new Array[HashSet[String]](primDimNum)
-      val mapColumnValuesWithId = new HashMap[String, HashSet[String]]
-      for (i <- 0 until primDimNum) {
-        columnValues(i) = new HashSet[String]
-        distinctValuesList += ((i, columnValues(i)))
-        mapColumnValuesWithId.put(model.primDimensions(i).getColumnId, columnValues(i))
-      }
-      val dimensionParsers = new Array[GenericParser](dimNum)
-      for (j <- 0 until dimNum) {
-        dimensionParsers(j) = GlobalDictionaryUtil.generateParserForDimension(
-          Some(model.dimensions(j)),
-          GlobalDictionaryUtil.createDataFormat(model.delimiters),
-          mapColumnValuesWithId).get
-      }
       var row: Row = null
       var value: String = null
       val rddIter = firstParent[Row].iterator(split, context)
@@ -182,6 +167,7 @@ class CarbonBlockDistinctValuesCombineRDD(
       case ex: Exception =>
         LOGGER.error(CarbonSparkInterFaceLogEvent.UNIBI_CARBON_SPARK_INTERFACE_MSG, ex)
     }
+
     distinctValuesList.map { iter =>
       val valueList = iter._2.toArray
       java.util.Arrays.sort(valueList, Ordering[String])
@@ -274,5 +260,60 @@ class CarbonGlobalDictionaryGenerateRDD(
       }
     }
     iter
+  }
+}
+
+/**
+ * A RDD to combine local dictionary distinct values.
+ *
+ * @constructor create a RDD with RDD[(String, Iterable[String])]
+ * @param prev the input RDD[(String, Iterable[String])]
+ * @param model a model package load info
+ */
+class CarbonLocalDictionaryCombineRDD(
+                                           prev: RDD[(String, Iterable[String])],
+                                           model: DictionaryLoadModel)
+  extends RDD[(Int, Array[String])](prev) with Logging {
+
+  override def getPartitions: Array[Partition] = firstParent[(String, Iterable[String])].partitions
+
+  override def compute(split: Partition, context: TaskContext): Iterator[(Int, Array[String])] = {
+    val LOGGER = LogServiceFactory.getLogService(this.getClass().getName())
+
+    val distinctValuesList = new ArrayBuffer[(Int, HashSet[String])]
+    try {
+      val dimensionParsers = GlobalDictionaryUtil.createDimensionParsers(model, distinctValuesList)
+      val dimNum = model.dimensions.length
+      // Map[dimColName -> dimColNameIndex]
+      val columnIndexMap = new HashMap[String, Int]()
+      for (j <- 0 until dimNum) {
+        columnIndexMap.put(model.dimensions(j).getColName, j)
+      }
+
+      var row: (String, Iterable[String]) = null
+      val rddIter = firstParent[(String, Iterable[String])].iterator(split, context)
+      // generate block distinct value set
+      while (rddIter.hasNext) {
+        row = rddIter.next()
+        if (row != null) {
+          columnIndexMap.get(row._1) match {
+            case Some(index) =>
+              for (record <- row._2) {
+                dimensionParsers(index).parseString(record)
+              }
+            case None =>
+          }
+        }
+      }
+    } catch {
+      case ex: Exception =>
+        LOGGER.error(CarbonSparkInterFaceLogEvent.UNIBI_CARBON_SPARK_INTERFACE_MSG, ex)
+    }
+
+    distinctValuesList.map { iter =>
+      val valueList = iter._2.toArray
+      java.util.Arrays.sort(valueList, Ordering[String])
+      (iter._1, valueList)
+    }.iterator
   }
 }

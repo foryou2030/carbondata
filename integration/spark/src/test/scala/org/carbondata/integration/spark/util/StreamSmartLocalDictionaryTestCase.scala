@@ -42,14 +42,12 @@ class StreamSmartLocalDictionaryTestCase extends QueryTest with BeforeAndAfterAl
   var streamComplexRelation: CarbonRelation = _
   var sampleLocalDictionaryFile: String = _
   var complexLocalDictionaryFile: String = _
-  var localDictionaryFileExtension: String = _
-  var noLocalDictionaryFile: String = _
-
 
   def buildCarbonLoadModel(relation: CarbonRelation,
     filePath: String,
     dimensionFilePath: String,
-    header: String): CarbonLoadModel = {
+    header: String,
+    localDictFilePath: String): CarbonLoadModel = {
     val carbonLoadModel = new CarbonLoadModel
     carbonLoadModel.setTableName(relation.cubeMeta.carbonTableIdentifier.getDatabaseName)
     carbonLoadModel.setDatabaseName(relation.cubeMeta.carbonTableIdentifier.getTableName)
@@ -65,6 +63,8 @@ class StreamSmartLocalDictionaryTestCase extends QueryTest with BeforeAndAfterAl
     carbonLoadModel.setCsvDelimiter(",")
     carbonLoadModel.setComplexDelimiterLevel1("\\$")
     carbonLoadModel.setComplexDelimiterLevel2("\\:")
+    carbonLoadModel.setLocalDictPath(localDictFilePath)
+    carbonLoadModel.setDictFileExt(".dictionary")
     carbonLoadModel
   }
 
@@ -79,18 +79,29 @@ class StreamSmartLocalDictionaryTestCase extends QueryTest with BeforeAndAfterAl
     pwd = new File(this.getClass.getResource("/").getPath + "/../../").getCanonicalPath
     sampleLocalDictionaryFile = pwd + "/src/test/resources/localdictionary/sample/20160423/1400_1405/"
     complexLocalDictionaryFile = pwd + "/src/test/resources/localdictionary/complex/20160423/1400_1405/"
-    localDictionaryFileExtension = ".dictionary"
-    noLocalDictionaryFile = ""
   }
 
   def buildTable() = {
     try {
-      sql("CREATE CUBE IF NOT EXISTS sample_stream DIMENSIONS (id STRING, name STRING, city STRING) MEASURES (age INTEGER) OPTIONS(PARTITIONER[CLASS='org.carbondata.integration.spark.partition.api.impl.SampleDataPartitionerImpl',COLUMNS=(id),PARTITION_COUNT=1])")
+      sql(
+        "CREATE CUBE IF NOT EXISTS sample_stream DIMENSIONS (id STRING, name STRING, city STRING) " +
+          "MEASURES (age INTEGER) OPTIONS(PARTITIONER[CLASS='org.carbondata.integration.spark" +
+          ".partition.api.impl.SampleDataPartitionerImpl',COLUMNS=(id),PARTITION_COUNT=1])"
+      )
     } catch {
       case ex: Throwable => logError(ex.getMessage + "\r\n" + ex.getStackTraceString)
     }
     try {
-      sql("create cube complextypes_stream dimensions(deviceInformationId integer, channelsId string, ROMSize string, purchasedate string, mobile struct<imei string, imsi string>, MAC array<string>, locationinfo array<struct<ActiveAreaId integer, ActiveCountry string, ActiveProvince string, Activecity string, ActiveDistrict string, ActiveStreet string>>, proddate struct<productionDate string,activeDeactivedate array<string>>) measures(gamePointId numeric,contractNumber numeric) OPTIONS (PARTITIONER [CLASS = 'org.carbondata.integration.spark.partition.api.impl.SampleDataPartitionerImpl' ,COLUMNS= (deviceInformationId) , PARTITION_COUNT=1] )")
+      sql(
+        "create cube complextypes_stream dimensions(deviceInformationId integer, channelsId string, " +
+          "ROMSize string, purchasedate string, mobile struct<imei string, imsi string>, MAC " +
+          "array<string>, locationinfo array<struct<ActiveAreaId integer, ActiveCountry string, " +
+          "ActiveProvince string, Activecity string, ActiveDistrict string, ActiveStreet " +
+          "string>>, proddate struct<productionDate string,activeDeactivedate array<string>>) " +
+          "measures(gamePointId numeric,contractNumber numeric) OPTIONS (PARTITIONER [CLASS = " +
+          "'org.carbondata.integration.spark.partition.api.impl.SampleDataPartitionerImpl' ," +
+          "COLUMNS= (deviceInformationId) , PARTITION_COUNT=1] )"
+      )
     } catch {
       case ex: Throwable => logError(ex.getMessage + "\r\n" + ex.getStackTraceString)
     }
@@ -104,15 +115,19 @@ class StreamSmartLocalDictionaryTestCase extends QueryTest with BeforeAndAfterAl
 
   test("Support generate global dictionary from streamSmart local dictionary") {
     var header = "id,name,city,age"
-    var carbonLoadModel = buildCarbonLoadModel(streamSampleRelation, null, null, header)
-    GlobalDictionaryUtil.generateGlobalDictionary(CarbonHiveContext, carbonLoadModel, streamSampleRelation.cubeMeta.dataPath,
-      sampleLocalDictionaryFile, localDictionaryFileExtension)
+    var carbonLoadModel = buildCarbonLoadModel(streamSampleRelation, null, null, header, sampleLocalDictionaryFile)
+    GlobalDictionaryUtil
+      .generateGlobalDictionary(CarbonHiveContext,
+        carbonLoadModel,
+        streamSampleRelation.cubeMeta.dataPath)
   }
 
   test("Support generate global dictionary from streamSmart local dictionary file for complex type") {
     val header = "deviceInformationId,channelsId,ROMSize,purchasedate,mobile,MAC,locationinfo,proddate,gamePointId,contractNumber"
-    var carbonLoadModel = buildCarbonLoadModel(streamComplexRelation, null, null, header)
-    GlobalDictionaryUtil.generateGlobalDictionary(CarbonHiveContext, carbonLoadModel, streamComplexRelation.cubeMeta.dataPath,
-      complexLocalDictionaryFile, localDictionaryFileExtension)
+    var carbonLoadModel = buildCarbonLoadModel(streamComplexRelation, null, null, header, complexLocalDictionaryFile)
+    GlobalDictionaryUtil
+      .generateGlobalDictionary(CarbonHiveContext,
+      carbonLoadModel,
+      streamComplexRelation.cubeMeta.dataPath)
   }
 }

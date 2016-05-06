@@ -1891,6 +1891,9 @@ private[sql] case class LoadCube(
         carbonLoadModel.setComplexDelimiterLevel2(
           CarbonUtil.escapeComplexDelimiterChar(complex_delimiter_level_2))
       }
+      // set local dictionary path, and dictionary file extension
+      carbonLoadModel.setLocalDictPath(localDictionaryPath)
+      carbonLoadModel.setDictFileExt(dictionaryFileExtension)
 
       var partitionStatus = CarbonCommonConstants.STORE_LOADSTATUS_SUCCESS
       try {
@@ -1926,7 +1929,7 @@ private[sql] case class LoadCube(
             escapeChar, booleanValForMultiLine)(sqlContext.asInstanceOf[HiveContext])
         }
         GlobalDictionaryUtil
-          .generateGlobalDictionary(sqlContext, carbonLoadModel, relation.cubeMeta.dataPath, localDictionaryPath, dictionaryFileExtension)
+          .generateGlobalDictionary(sqlContext, carbonLoadModel, relation.cubeMeta.dataPath)
         CarbonDataRDDFactory
             .loadCarbonData(sqlContext, carbonLoadModel, storeLocation, relation.cubeMeta.dataPath,
               kettleHomePath,

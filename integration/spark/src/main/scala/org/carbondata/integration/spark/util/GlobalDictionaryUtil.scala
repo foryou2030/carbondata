@@ -17,7 +17,7 @@
 
 package org.carbondata.integration.spark.util
 
-import java.io.IOException
+import java.io.{File, IOException}
 import java.util.regex.Pattern
 
 import scala.collection.JavaConverters._
@@ -27,8 +27,6 @@ import scala.language.implicitConversions
 import scala.util.control.Breaks.{break, breakable}
 
 import org.apache.commons.lang3.{ArrayUtils, StringUtils}
-import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.hadoop.conf.Configuration
 import org.apache.spark.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.rdd.RDD.rddToPairRDDFunctions
@@ -440,32 +438,13 @@ object GlobalDictionaryUtil extends Logging {
    * @param dicFileExtension
    * @return localDictionaryRdd
    */
-  private def ReadLocalDictionaryFiles(sqlContext: SQLContext, csvFileColumns: Array[String], requireColumns: Array[String],
+  private def readLocalDictionaryFiles(sqlContext: SQLContext, csvFileColumns: Array[String], requireColumns: Array[String],
                                             localDictionaryPath: String, dicFileExtension: String) = {
-    // read local dictionary file
-    var basicRdd: RDD[String] = null
     var localDictionaryRdd: RDD[(String, Iterable[String])] = null
-    var fs: FileSystem = null
+    val dictionaryFiles = localDictionaryPath + File.separator + "*" + dicFileExtension
     try {
-      val conf = new Configuration()
-      val dictionaryPath = new Path(localDictionaryPath)
-      fs = dictionaryPath.getFileSystem(conf)
-      if(fs.isFile(dictionaryPath)) {
-        basicRdd = sqlContext.sparkContext.textFile(localDictionaryPath)
-      } else {
-        for(dictionaryFile <- fs.listStatus(dictionaryPath)) {
-          val filePath = dictionaryFile.getPath
-          if(fs.isFile(filePath) && filePath.getName.endsWith(dicFileExtension) && dictionaryFile.getLen != 0) {
-            val tmpRdd = sqlContext.sparkContext.textFile(filePath.toString)
-            if(basicRdd != null) {
-              basicRdd = basicRdd.union(tmpRdd)
-            } else {
-              basicRdd = tmpRdd
-            }
-          }
-        }
-      }
-      localDictionaryRdd = basicRdd
+      // read local dictionary file, and spilt (columnIndex, columnValue)
+      val basicRdd =  sqlContext.sparkContext.textFile(dictionaryFiles)
         .map(x => {
         val tokens = x.split("" + CSVWriter.DEFAULT_SEPARATOR)
         var index: Int = 0
@@ -479,6 +458,8 @@ object GlobalDictionaryUtil extends Logging {
         }
         (index, value)
       })
+      // group by column index, and filter required columns
+      localDictionaryRdd = basicRdd
         .groupByKey()
         .map(x => (csvFileColumns(x._1), x._2))
         .filter(x => requireColumns.toList.contains(x._1))
@@ -486,11 +467,8 @@ object GlobalDictionaryUtil extends Logging {
       case ex: Exception =>
         logError("read local dictionary files failed")
         throw ex
-    } finally {
-      if(fs != null) {
-        fs.close()
-      }
     }
+
     localDictionaryRdd
   }
 
@@ -502,9 +480,7 @@ object GlobalDictionaryUtil extends Logging {
    */
   def generateGlobalDictionary(sqlContext: SQLContext,
                                carbonLoadModel: CarbonLoadModel,
-                               hdfsLocation: String,
-                               localDictionaryPath: String,
-                               dictionaryFileExtension: String): Unit = {
+                               hdfsLocation: String): Unit = {
     try {
       val table = new CarbonTableIdentifier(carbonLoadModel.getDatabaseName,
         carbonLoadModel.getTableName)
@@ -520,6 +496,7 @@ object GlobalDictionaryUtil extends Logging {
       val carbonTable = carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable
       val dimensions = carbonTable.getDimensionByTableName(
         carbonTable.getFactTableName).asScala.toArray
+      val localDictionaryPath = carbonLoadModel.getLocalDictPath
       if(!StringUtils.isEmpty(localDictionaryPath)) {
         // fill the map[columnIndex -> columnName]
         var csvFileColumns:Array[String] = null
@@ -539,8 +516,9 @@ object GlobalDictionaryUtil extends Logging {
         if (requireDimension.size >= 1) {
           val model = createDictionaryLoadModel(carbonLoadModel, table, requireDimension,
             hdfsLocation, dictfolderPath)
+          val dictionaryFileExtension = carbonLoadModel.getDictFileExt
           // read local dictionary file, and group by key
-          val localDictionaryRdd = ReadLocalDictionaryFiles(sqlContext, csvFileColumns, requireColumnNames,
+          val localDictionaryRdd = readLocalDictionaryFiles(sqlContext, csvFileColumns, requireColumnNames,
             localDictionaryPath, dictionaryFileExtension)
           // read exist dictionary and combine
           val inputRDD = new CarbonLocalDictionaryCombineRDD(localDictionaryRdd, model)

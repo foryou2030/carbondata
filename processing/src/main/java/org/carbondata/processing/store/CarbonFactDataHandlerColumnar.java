@@ -504,7 +504,7 @@ public class CarbonFactDataHandlerColumnar implements CarbonFactHandler {
       if (type[otherMeasureIndex[k]] == CarbonCommonConstants.BIG_INT_MEASURE) {
         if (null == row[otherMeasureIndex[k]]) {
           //TODO: Not handling unique key as it will be handled in presence data
-          dataHolder[otherMeasureIndex[k]].setWritableLongValueByIndex(entryCount, 0);
+          dataHolder[otherMeasureIndex[k]].setWritableLongValueByIndex(entryCount, 0L);
         } else {
           dataHolder[otherMeasureIndex[k]]
               .setWritableLongValueByIndex(entryCount, row[otherMeasureIndex[k]]);
@@ -513,14 +513,14 @@ public class CarbonFactDataHandlerColumnar implements CarbonFactHandler {
         if (null == row[otherMeasureIndex[k]]) {
           //TODO: Not handling unique key as it will be handled in presence data
           dataHolder[otherMeasureIndex[k]]
-              .setWritableDoubleValueByIndex(entryCount, 0);
+              .setWritableDoubleValueByIndex(entryCount, 0.0);
         } else {
           dataHolder[otherMeasureIndex[k]]
               .setWritableDoubleValueByIndex(entryCount, row[otherMeasureIndex[k]]);
         }
       }
     }
-    calculateMaxMinUnique(max, min, decimal, otherMeasureIndex, row);
+    calculateMaxMin(max, min, decimal, otherMeasureIndex, row);
     for (int i = 0; i < customMeasureIndex.length; i++) {
       if (null == row[customMeasureIndex[i]]
           && type[customMeasureIndex[i]] == CarbonCommonConstants.BIG_DECIMAL_MEASURE) {
@@ -537,7 +537,7 @@ public class CarbonFactDataHandlerColumnar implements CarbonFactHandler {
       b = byteBuffer.array();
       dataHolder[customMeasureIndex[i]].setWritableByteArrayValueByIndex(entryCount, b);
     }
-    calculateMaxMinUnique(max, min, decimal, customMeasureIndex, row);
+    calculateMaxMin(max, min, decimal, customMeasureIndex, row);
     this.entryCount++;
     // if entry count reaches to blocklet size then we are ready to write
     // this to data file and update the intermediate files
@@ -837,31 +837,33 @@ public class CarbonFactDataHandlerColumnar implements CarbonFactHandler {
   /**
    * This method will be used to update the max value for each measure
    */
-  private void calculateMaxMinUnique(Object[] max, Object[] min, int[] decimal, int[] msrIndex,
+  private void calculateMaxMin(Object[] max, Object[] min, int[] decimal, int[] msrIndex,
       Object[] row) {
     // Update row level min max
     for (int i = 0; i < msrIndex.length; i++) {
       int count = msrIndex[i];
-      if (type[count] == CarbonCommonConstants.SUM_COUNT_VALUE_MEASURE) {
-        double value = (double) row[count];
-        double maxVal = (double) max[count];
-        double minVal = (double) min[count];
-        max[count] = (maxVal > value ? max[count] : value);
-        min[count] = (minVal < value ? min[count] : value);
-        int num = (value % 1 == 0) ? 0 : decimalPointers;
-        decimal[count] = (decimal[count] > num ? decimal[count] : num);
-      } else if (type[count] == CarbonCommonConstants.BIG_INT_MEASURE) {
-        long value = (long) row[count];
-        long maxVal = (long) max[count];
-        long minVal = (long) min[count];
-        max[count] = (maxVal > value ? max[count] : value);
-        min[count] = (minVal < value ? min[count] : value);
-        int num = (value % 1 == 0) ? 0 : decimalPointers;
-        decimal[count] = (decimal[count] > num ? decimal[count] : num);
-      } else if (type[count] == CarbonCommonConstants.BIG_DECIMAL_MEASURE) {
-        BigDecimal value = (BigDecimal) row[count];
-        BigDecimal minVal = (BigDecimal) min[count];
-        min[count] = minVal.min(value);
+      if (row[count] != null) {
+        if (type[count] == CarbonCommonConstants.SUM_COUNT_VALUE_MEASURE) {
+          double value = (double) row[count];
+          double maxVal = (double) max[count];
+          double minVal = (double) min[count];
+          max[count] = (maxVal > value ? max[count] : value);
+          min[count] = (minVal < value ? min[count] : value);
+          int num = (value % 1 == 0) ? 0 : decimalPointers;
+          decimal[count] = (decimal[count] > num ? decimal[count] : num);
+        } else if (type[count] == CarbonCommonConstants.BIG_INT_MEASURE) {
+          long value = (long) row[count];
+          long maxVal = (long) max[count];
+          long minVal = (long) min[count];
+          max[count] = (maxVal > value ? max[count] : value);
+          min[count] = (minVal < value ? min[count] : value);
+          int num = (value % 1 == 0) ? 0 : decimalPointers;
+          decimal[count] = (decimal[count] > num ? decimal[count] : num);
+        } else if (type[count] == CarbonCommonConstants.BIG_DECIMAL_MEASURE) {
+          BigDecimal value = (BigDecimal) row[count];
+          BigDecimal minVal = (BigDecimal) min[count];
+          min[count] = minVal.min(value);
+        }
       }
     }
   }

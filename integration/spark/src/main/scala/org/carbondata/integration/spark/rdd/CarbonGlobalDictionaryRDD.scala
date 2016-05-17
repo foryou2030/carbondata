@@ -281,8 +281,8 @@ class CarbonLocalDictionaryCombineRDD(
   override def getPartitions: Array[Partition] =
     firstParent[(String, Iterable[String])].partitions
 
-  override def compute(split: Partition, context: TaskContext
-    ): Iterator[(Int, Array[String])] = {
+  override def compute(split: Partition,
+                         context: TaskContext): Iterator[(Int, Array[String])] = {
     val LOGGER = LogServiceFactory.getLogService(this.getClass().getName())
 
     val distinctValuesList = new ArrayBuffer[(Int, HashSet[String])]
